@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a KeepSmile light",
+        "description": "Select a discovered light and give it a name.",
+        "data": {
+          "mac": "Light",
+          "name": "Name"
+        }
+      },
+      "manual": {
+        "title": "Add a KeepSmile light manually",
+        "description": "No lights were discovered. Enter the Bluetooth MAC address (e.g. 23:01:02:98:1B:2B) and a name.",
+        "data": {
+          "mac": "MAC address",
+          "name": "Name"
+        }
+      },
+      "validate": {
+        "title": "Validate the light",
+        "description": "The light should have flicked on and off. Confirm you saw it, or retry the connection.",
+        "data": {
+          "flicker": "The light flicked on and off",
+          "retry": "Retry connection"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This light is already configured.",
+      "cannot_connect": "Could not connect to the light.",
+      "cannot_validate": "The light did not respond as expected."
+    },
+    "error": {
+      "connect": "Connection failed."
+    }
+  }
+}

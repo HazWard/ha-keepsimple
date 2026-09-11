@@ -1,6 +1,7 @@
 import asyncio
-from .keepsimple import discover, KeepSimpleInstance
 from typing import Any
+
+from .keepsmile import KeepSmileInstance, discover
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_MAC
@@ -9,17 +10,15 @@ from homeassistant.helpers.device_registry import format_mac
 
 from .const import DOMAIN, LOGGER
 
-DATA_SCHEMA = vol.Schema({("host"): str})
-
 MANUAL_MAC = "manual"
 
-class TrionesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+
+class KeepSmileFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
     def __init__(self) -> None:
         self.mac = None
-        self.triones_instance = None
+        self.keepsmile_instance = None
         self.name = None
 
     async def async_step_user(self, user_input=None):
@@ -27,21 +26,31 @@ class TrionesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             if user_input["mac"] == MANUAL_MAC:
                 return await self.async_step_manual()
-            
+
             self.mac = user_input["mac"]
             self.name = user_input["name"]
             await self.async_set_unique_id(format_mac(self.mac))
+            self._abort_if_unique_id_configured()
             return await self.async_step_validate()
 
         already_configured = self._async_current_ids(False)
-        devices = await discover()
-        devices = [device for device in devices if format_mac(device.address) not in already_configured]
+        try:
+            devices = await discover()
+        except Exception as error:
+            LOGGER.error("Discovery failed: %s", error)
+            devices = []
+        devices = [
+            device
+            for device in devices
+            if format_mac(device.address) not in already_configured
+        ]
 
         if not devices:
             return await self.async_step_manual()
-        
+
         return self.async_show_form(
-            step_id="user", data_schema=vol.Schema(
+            step_id="user",
+            data_schema=vol.Schema(
                 {
                     vol.Required("mac"): vol.In(
                         {
@@ -49,18 +58,22 @@ class TrionesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                             MANUAL_MAC: "Manually add a MAC address",
                         }
                     ),
-                    vol.Required("name"): str
+                    vol.Required("name"): str,
                 }
             ),
-            errors={})
+            errors={},
+        )
 
     async def async_step_validate(self, user_input: "dict[str, Any] | None" = None):
         if user_input is not None:
             if "flicker" in user_input:
                 if user_input["flicker"]:
-                    return self.async_create_entry(title=self.name, data={CONF_MAC: self.mac, "name": self.name})
+                    return self.async_create_entry(
+                        title=self.name,
+                        data={CONF_MAC: self.mac, "name": self.name},
+                    )
                 return self.async_abort(reason="cannot_validate")
-            
+
             if "retry" in user_input and not user_input["retry"]:
                 return self.async_abort(reason="cannot_connect")
 
@@ -68,48 +81,47 @@ class TrionesFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
         if error:
             return self.async_show_form(
-                step_id="validate", data_schema=vol.Schema(
-                    {
-                        vol.Required("retry"): bool
-                    }
-                ), errors={"base": "connect"})
-        
+                step_id="validate",
+                data_schema=vol.Schema({vol.Required("retry"): bool}),
+                errors={"base": "connect"},
+            )
+
         return self.async_show_form(
-            step_id="validate", data_schema=vol.Schema(
-                {
-                    vol.Required("flicker"): bool
-                }
-            ), errors={})
+            step_id="validate",
+            data_schema=vol.Schema({vol.Required("flicker"): bool}),
+            errors={},
+        )
 
     async def async_step_manual(self, user_input: "dict[str, Any] | None" = None):
-        if user_input is not None:            
+        if user_input is not None:
             self.mac = user_input["mac"]
             self.name = user_input["name"]
             await self.async_set_unique_id(format_mac(self.mac))
+            self._abort_if_unique_id_configured()
             return await self.async_step_validate()
 
         return self.async_show_form(
-            step_id="manual", data_schema=vol.Schema(
-                {
-                    vol.Required("mac"): str,
-                    vol.Required("name"): str
-                }
-            ), errors={})
+            step_id="manual",
+            data_schema=vol.Schema(
+                {vol.Required("mac"): str, vol.Required("name"): str}
+            ),
+            errors={},
+        )
 
     async def toggle_light(self):
-        if not self.triones_instance:
-            self.triones_instance = TrionesInstance(self.mac)
+        if not self.keepsmile_instance:
+            self.keepsmile_instance = KeepSmileInstance(self.mac, self.name)
         try:
-            await self.triones_instance.update()
-            if self.triones_instance.is_on:
-                await self.triones_instance.turn_off()
+            await self.keepsmile_instance.update()
+            if self.keepsmile_instance.is_on:
+                await self.keepsmile_instance.turn_off()
                 await asyncio.sleep(2)
-                await self.triones_instance.turn_on()
+                await self.keepsmile_instance.turn_on()
             else:
-                await self.triones_instance.turn_on()
+                await self.keepsmile_instance.turn_on()
                 await asyncio.sleep(2)
-                await self.triones_instance.turn_off()
+                await self.keepsmile_instance.turn_off()
         except (Exception) as error:
             return error
         finally:
-            await self.triones_instance.disconnect()
+            await self.keepsmile_instance.disconnect()
